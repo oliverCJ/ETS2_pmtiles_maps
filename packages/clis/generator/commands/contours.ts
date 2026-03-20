@@ -118,7 +118,8 @@ export function handler(args: BuilderArguments<typeof builder>) {
     );
 
     const pmTilesPath = path.join(args.outputDir, pmtilesFilename);
-    fs.renameSync(tmpPmTilesPath, pmTilesPath);
+    fs.copyFileSync(tmpPmTilesPath, pmTilesPath);
+    fs.rmSync(tmpPmTilesPath);
     fs.rmSync(tmpPmTilesLog);
     if (cleanupGeoJson) {
       logger.log('deleting temporary GeoJSON files...');

@@ -5,7 +5,7 @@ import path from 'path';
 import type { Argv, BuilderArguments } from 'yargs';
 import { convertToMapGeoJson } from '../geo-json/map';
 import { logger } from '../logger';
-import type { FocusOptions } from '../mapped-data';
+import type { FocusOptions, MappedData } from '../mapped-data';
 import { readMapData } from '../mapped-data';
 import { maybeEnsureOutputDir, untildify } from './path-helpers';
 
@@ -102,7 +102,47 @@ export const builder = (yargs: Argv) =>
       return true;
     });
 
-export function handler(args: BuilderArguments<typeof builder>) {
+/**
+ * Calculate game coordinate bounds from map data.
+ * Returns bounds in original game coordinates (x, z).
+ */
+function calculateGameBounds(
+  tsMapData: MappedData,
+): { minX: number; minY: number; maxX: number; maxY: number } {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  // Process nodes
+  for (const node of tsMapData.nodes.values()) {
+    minX = Math.min(minX, node.x);
+    maxX = Math.max(maxX, node.x);
+    minY = Math.min(minY, node.z);
+    maxY = Math.max(maxY, node.z);
+  }
+
+  // Process cities
+  for (const city of tsMapData.cities.values()) {
+    minX = Math.min(minX, city.x);
+    maxX = Math.max(maxX, city.x);
+    minY = Math.min(minY, city.y);
+    maxY = Math.max(maxY, city.y);
+  }
+
+  // Process countries
+  for (const country of tsMapData.countries.values()) {
+    minX = Math.min(minX, country.x);
+    maxX = Math.max(maxX, country.x);
+    minY = Math.min(minY, country.y);
+    maxY = Math.max(maxY, country.y);
+  }
+
+  return { minX, minY, maxX, maxY };
+}
+
+
+export async function handler(args: BuilderArguments<typeof builder>) {
   const startTime = Date.now();
 
   const types = Array.isArray(args.type) ? args.type : [args.type];
@@ -155,6 +195,29 @@ export function handler(args: BuilderArguments<typeof builder>) {
       cleanupGeoJson = true;
     }
 
+    // Calculate game coordinate bounds for custom metadata
+    logger.log('calculating game coordinate bounds...');
+    const gameBounds = calculateGameBounds(tsMapData);
+    const customMetadata = {
+      tsnMetaVersion: 1,
+      tsnGame: gamePrefix,
+      tsnBounds: {
+        minX: gameBounds.minX,
+        minY: gameBounds.minY,
+        maxX: gameBounds.maxX,
+        maxY: gameBounds.maxY,
+      },
+      tsnAxis: {
+        yUp: true,
+        note: 'raw game coord: x,z; renderer may map z->y and flip as needed',
+      },
+      tsnProjection: {
+        type: 'game-linear-to-webmercator',
+        webMercatorLatClamp: 85.05112878,
+      },
+    };
+    logger.log('custom metadata:', JSON.stringify(customMetadata, null, 2));
+
     // Minimum attributes required for map styling to work
     // (see `['get', $somAttributeName]` and `text-field: '{someAttributeName}'`
     // expressions in map styles).
@@ -188,8 +251,8 @@ export function handler(args: BuilderArguments<typeof builder>) {
           ? minAttributes.map(a => `-y ${a}`).join(' ') + ' '
           : '') +
         `-B 4 ` + // -B 4 preserves all points, starting at zoom 4
-        `-b 10` + // -b 10 helps with tile-boundary weirdness
-        ` --force -o ${tmpTilesPath} ${geoJsonPath} ` +
+        `-b 10 ` + // -b 10 helps with tile-boundary weirdness
+        `--force -o ${tmpTilesPath} ${geoJsonPath} ` +
         `> ${tmpTilesLog} 2>&1`;
 
       logger.log(`running tippecanoe to generate ${type} file...`);
@@ -207,8 +270,22 @@ export function handler(args: BuilderArguments<typeof builder>) {
       );
 
       const tilesPath = path.join(args.outputDir, `${gamePrefix}.${type}`);
-      fs.renameSync(tmpTilesPath, tilesPath);
+      fs.copyFileSync(tmpTilesPath, tilesPath);
+      fs.rmSync(tmpTilesPath);
       fs.rmSync(tmpTilesLog);
+
+      // Export custom metadata as separate JSON file
+      if (type === 'pmtiles') {
+        const metadataPath = path.join(
+          args.outputDir,
+          `${gamePrefix}.metadata.json`,
+        );
+        logger.log(`writing metadata to ${metadataPath}...`);
+        fs.writeFileSync(
+          metadataPath,
+          JSON.stringify(customMetadata, null, 2),
+        );
+      }
     }
 
     if (cleanupGeoJson) {

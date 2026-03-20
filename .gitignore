@@ -1,7 +1,9 @@
 .vscode
 
 /.idea
+/.claude
 /out
+/output
 node_modules
 build
 coverage
