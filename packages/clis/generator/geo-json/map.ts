@@ -11,9 +11,13 @@ import {
 import { mapValues, putIfAbsent } from '@truckermudgeon/base/map';
 import { Preconditions } from '@truckermudgeon/base/precon';
 import { isLabeledPoi } from '@truckermudgeon/map/constants';
-import type { Polygon, RoadString } from '@truckermudgeon/map/prefabs';
+import type {
+  NavCurveRoadString,
+  Polygon,
+} from '@truckermudgeon/map/prefabs';
 import {
   toMapPosition,
+  toNavCurveRoadStrings,
   toRoadStringsAndPolygons,
 } from '@truckermudgeon/map/prefabs';
 import type {
@@ -264,6 +268,12 @@ export function convertToMapGeoJson(
     toRoadStringsAndPolygons(pd),
   );
 
+  logger.log('pre-computing prefab nav road strings...');
+  const prefabNavRoads = new Map<string, NavCurveRoadString[]>();
+  for (const [token, pd] of prefabDescriptions) {
+    prefabNavRoads.set(token, toNavCurveRoadStrings(pd));
+  }
+
   const isUnknownRoad = (p: PrefabFeature | RoadFeature) =>
     p.properties.type === 'road' && p.properties.roadType === 'unknown';
   // "v-junction" Prefabs, which will not be represented by a GeoJSON feature
@@ -284,6 +294,7 @@ export function convertToMapGeoJson(
       p,
       assertExists(prefabDescriptions.get(p.token)),
       comps,
+      prefabNavRoads.get(p.token) ?? [],
       nodes,
       roads,
       roadLooks,
@@ -312,6 +323,7 @@ export function convertToMapGeoJson(
         p,
         assertExists(prefabDescriptions.get(p.token)),
         assertExists(prefabComponents.get(p.token)),
+        prefabNavRoads.get(p.token) ?? [],
         nodes,
         roads,
         roadLooks,
@@ -330,6 +342,7 @@ export function convertToMapGeoJson(
       p,
       assertExists(prefabDescriptions.get(p.token)),
       assertExists(prefabComponents.get(p.token)),
+      prefabNavRoads.get(p.token) ?? [],
       nodes,
       roads,
       roadLooks,
@@ -377,6 +390,7 @@ export function convertToMapGeoJson(
         p,
         assertExists(prefabDescriptions.get(p.token)),
         assertExists(prefabComponents.get(p.token)),
+        prefabNavRoads.get(p.token) ?? [],
         nodes,
         roads,
         roadLooks,
@@ -1100,11 +1114,10 @@ function prefabToFeatures(
   prefabDescription: PrefabDescription,
   {
     polygons,
-    roadStrings,
   }: {
     polygons: Polygon[];
-    roadStrings: RoadString[];
   },
+  navRoadStrings: NavCurveRoadString[],
   nodes: ReadonlyMap<string | bigint, Node>,
   // TODO make use of this to better position roads within a prefab
   _roadMap: ReadonlyMap<string, Road>,
@@ -1145,15 +1158,12 @@ function prefabToFeatures(
         },
       };
     }),
-    ...roadStrings.map<RoadFeature>((road, i) => {
-      const txPoints = road.points.map(tx);
+    ...navRoadStrings.map<RoadFeature>((road, i) => {
+      const txPoints = road.points.map(p => tx(p));
       let nearestRoadType: RoadType = 'unknown';
       if (!prefab.hidden) {
-        // we don't care too much about roads in hidden prefabs, because the map
-        // styles all hidden roads the same.
         const roadStart = txPoints[0];
         const roadEnd = txPoints.at(-1)!;
-        // search for the first road at the road string's start or end point.
         const nearestRoad = [
           roadQuadTree.find(...roadStart, 2),
           roadQuadTree.find(...roadEnd, 2),
@@ -1169,9 +1179,6 @@ function prefabToFeatures(
             roadLookMap.get(nearestRoad.roadLookToken)!,
           );
           for (const roadPoint of txPoints) {
-            // add road point entries, based on the current road string. used
-            // for fallback when detecting road types of prefab-internal road
-            // strings.
             roadQuadTree.add({
               ...nearestRoad,
               x: roadPoint[0],
@@ -1179,42 +1186,31 @@ function prefabToFeatures(
             });
           }
         } else {
-          // no road detected at the road string's start or end.
-          // fallback to the type of the nearest road segment
           const nearestRoads = [
             roadQuadTree.find(...roadStart)!,
             roadQuadTree.find(...roadEnd)!,
           ];
-          let nearestRoad;
+          let nearestRoadFallback;
           if (!opts.allowUnknownRoadType) {
             const mid = midPoint(roadStart, roadEnd);
-            nearestRoad = nearestRoads.sort(
+            nearestRoadFallback = nearestRoads.sort(
               (a, b) => distance(a, mid) - distance(b, mid),
             )[0];
           } else {
-            nearestRoad = nearestRoads.find(
+            nearestRoadFallback = nearestRoads.find(
               entry =>
                 distance(entry, roadStart) < 1 || distance(entry, roadEnd) < 1,
             );
           }
-          if (nearestRoad && roadLookMap.has(nearestRoad.roadLookToken)) {
+          if (
+            nearestRoadFallback &&
+            roadLookMap.has(nearestRoadFallback.roadLookToken)
+          ) {
             nearestRoadType = getRoadType(
-              roadLookMap.get(nearestRoad.roadLookToken)!,
+              roadLookMap.get(nearestRoadFallback.roadLookToken)!,
             );
           }
         }
-      }
-      if (
-        !opts.allowUnknownRoadType &&
-        nearestRoadType === 'unknown' &&
-        !prefab.hidden
-      ) {
-        logger.warn(
-          'could not infer road type for prefab road at',
-          prefab.x,
-          ',',
-          prefab.y,
-        );
       }
       return {
         type: 'Feature',
@@ -1224,9 +1220,9 @@ function prefabToFeatures(
           dlcGuard: prefab.dlcGuard,
           prefab: prefab.token,
           roadType: nearestRoadType,
-          offset: road.offset,
-          leftLanes: road.lanesLeft,
-          rightLanes: road.lanesRight,
+          offset: 0,
+          leftLanes: road.leftLaneCount,
+          rightLanes: road.rightLaneCount,
           hidden: !!prefab.hidden,
           startNodeUid: findClosestNode(txPoints[0])?.uid.toString(16),
           endNodeUid: findClosestNode(txPoints.at(-1)!)?.uid.toString(16),
