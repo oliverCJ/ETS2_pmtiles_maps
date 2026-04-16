@@ -634,6 +634,155 @@ export function calculateLaneInfo(
   );
 }
 
+export interface NavCurveRoadString {
+  /** Spline points in prefab-local coordinate space */
+  points: [number, number][];
+  sourceNodeIndex: number;
+  targetNodeIndex: number;
+  /** Lanes travelling target→source direction (0 = one-way road) */
+  leftLaneCount: number;
+  /** Lanes travelling source→target direction */
+  rightLaneCount: number;
+}
+
+export interface NavLane {
+  /** Full spline points for this single lane, in prefab-local space */
+  curvePoints: [number, number][];
+  sourceNodeIndex: number;
+  targetNodeIndex: number;
+}
+
+/**
+ * Returns every individual nav-curve lane as a flat list.
+ * Use this for navigation graph edges (one entry per lane per direction).
+ */
+export function toNavLanes(prefabDesc: PrefabDescription): NavLane[] {
+  const lanes: NavLane[] = [];
+  for (
+    let nodeIndex = 0;
+    nodeIndex < prefabDesc.nodes.length;
+    nodeIndex++
+  ) {
+    const node = prefabDesc.nodes[nodeIndex];
+    for (const inputLaneIndex of node.inputLanes) {
+      const lane = getLane(prefabDesc, inputLaneIndex);
+      for (const branch of lane.branches) {
+        lanes.push({
+          curvePoints: branch.curvePoints,
+          sourceNodeIndex: nodeIndex,
+          targetNodeIndex: branch.targetNodeIndex,
+        });
+      }
+    }
+  }
+  return lanes;
+}
+
+/**
+ * Returns one road string per (sourceNode, targetNode) pair, using the
+ * median nav-curve lane as the visual centerline.
+ * Bidirectional pairs whose median curves are ≤7 units apart are merged
+ * into a single road string with leftLaneCount + rightLaneCount set.
+ */
+export function toNavCurveRoadStrings(
+  prefabDesc: PrefabDescription,
+): NavCurveRoadString[] {
+  // Step 1: group all lane paths by (sourceNodeIndex, targetNodeIndex)
+  const laneGroups = new Map<string, { paths: [number, number][][]; src: number; dst: number }>();
+  for (
+    let nodeIndex = 0;
+    nodeIndex < prefabDesc.nodes.length;
+    nodeIndex++
+  ) {
+    const node = prefabDesc.nodes[nodeIndex];
+    for (const inputLaneIndex of node.inputLanes) {
+      const lane = getLane(prefabDesc, inputLaneIndex);
+      for (const branch of lane.branches) {
+        const key = `${nodeIndex}-${branch.targetNodeIndex}`;
+        if (!laneGroups.has(key)) {
+          laneGroups.set(key, {
+            paths: [],
+            src: nodeIndex,
+            dst: branch.targetNodeIndex,
+          });
+        }
+        laneGroups.get(key)!.paths.push(branch.curvePoints);
+      }
+    }
+  }
+
+  // Step 2: build directed road strings (one per group, median lane)
+  const directed = new Map<
+    string,
+    { points: [number, number][]; src: number; dst: number; count: number }
+  >();
+  for (const [key, { paths, src, dst }] of laneGroups) {
+    const medianPath = paths[Math.floor(paths.length / 2)];
+    directed.set(key, { points: medianPath, src, dst, count: paths.length });
+  }
+
+  // Step 3: merge bidirectional pairs
+  const result: NavCurveRoadString[] = [];
+  const processed = new Set<string>();
+
+  for (const [key, fwd] of directed) {
+    if (processed.has(key)) continue;
+    processed.add(key);
+
+    const revKey = `${fwd.dst}-${fwd.src}`;
+    processed.add(revKey);
+
+    const rev = directed.get(revKey);
+    if (!rev) {
+      // one-way connection
+      result.push({
+        points: fwd.points,
+        sourceNodeIndex: fwd.src,
+        targetNodeIndex: fwd.dst,
+        leftLaneCount: 0,
+        rightLaneCount: fwd.count,
+      });
+      continue;
+    }
+
+    // measure lateral separation at midpoints
+    const fwdMid = fwd.points[Math.floor(fwd.points.length / 2)];
+    const revMid = rev.points[Math.floor(rev.points.length / 2)];
+    const lateralDist = distance(fwdMid, revMid);
+
+    // threshold: ~1.5 lane widths (4.5 units/lane)
+    const DIVIDED_THRESHOLD = 7;
+    if (lateralDist <= DIVIDED_THRESHOLD) {
+      // undivided bidirectional road — merge
+      result.push({
+        points: fwd.points,
+        sourceNodeIndex: fwd.src,
+        targetNodeIndex: fwd.dst,
+        leftLaneCount: rev.count,
+        rightLaneCount: fwd.count,
+      });
+    } else {
+      // divided road — keep both as one-way strings
+      result.push({
+        points: fwd.points,
+        sourceNodeIndex: fwd.src,
+        targetNodeIndex: fwd.dst,
+        leftLaneCount: 0,
+        rightLaneCount: fwd.count,
+      });
+      result.push({
+        points: rev.points,
+        sourceNodeIndex: rev.src,
+        targetNodeIndex: rev.dst,
+        leftLaneCount: 0,
+        rightLaneCount: rev.count,
+      });
+    }
+  }
+
+  return result;
+}
+
 function getLane(prefabDesc: PrefabDescription, inputLaneIndex: number): Lane {
   const startCurve = prefabDesc.navCurves[inputLaneIndex];
   Preconditions.checkArgument(

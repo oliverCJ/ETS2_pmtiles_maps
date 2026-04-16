@@ -179,3 +179,12 @@ WSL 中的输出目录对应 Windows 路径：
 | `~/ETS2LA_maps/output/` | `\\wsl$\Ubuntu\home\用户名\ETS2LA_maps\output\` |
 
 在 Windows 文件管理器地址栏输入 `\\wsl$\Ubuntu\` 可以浏览 WSL 文件系统。
+
+## 启动前端应用
+ `npm start --workspace=packages/apps/prefabs`
+
+  或者主地图应用：
+
+  `npm start --workspace=packages/apps/demo`
+
+不过 demo app 需要 PMTiles 地图数据才能显示内容，prefabs app 是纯前端调试工具，不需要任何外部数据，直接就能看到效果。建议先跑 prefabs app。

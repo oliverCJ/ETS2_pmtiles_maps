@@ -1,0 +1,99 @@
+<h2>编辑模式的技术方案选择</h2>
+<p class="subtitle">EditMode 视图中，用什么技术实现可拖拽的控制点？</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>SVG 原生拖拽</h3>
+      <p>复用现有 Preview.tsx 的 SVG 渲染方式，在控制点上添加 <code>onMouseDown / onMouseMove / onMouseUp</code> 事件，手动处理坐标转换。</p>
+      <h4>核心代码思路：</h4>
+      <pre style="background:#f5f5f5;padding:8px;font-size:11px;border-radius:4px;">
+// SVG viewBox 坐标 ↔ 屏幕坐标转换
+const pt = svgRef.current.createSVGPoint();
+pt.x = e.clientX; pt.y = e.clientY;
+const svgCoords = pt.matrixTransform(
+  svgRef.current.getScreenCTM().inverse()
+);
+      </pre>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul>
+          <li>零新依赖，项目已有 SVG 渲染基础</li>
+          <li>与现有 Preview.tsx 代码风格完全一致</li>
+          <li>SVG 坐标系和 prefab 局部坐标系天然对应，无需额外映射</li>
+          <li>轻量，不引入任何第三方库</li>
+        </ul></div>
+        <div class="cons"><h4>缺点</h4><ul>
+          <li>需要手动处理 viewBox 坐标转换（约 20 行代码）</li>
+          <li>多点同时拖拽需要自己管理状态</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>React 拖拽库（@use-gesture/react）</h3>
+      <p>引入 <code>@use-gesture/react</code>，用 <code>useDrag</code> hook 处理拖拽手势，自动处理鼠标/触摸事件的坐标计算。</p>
+      <h4>核心代码思路：</h4>
+      <pre style="background:#f5f5f5;padding:8px;font-size:11px;border-radius:4px;">
+const bind = useDrag(({ offset: [x, y] }) => {
+  setPoints(pts => pts.map((p, i) =>
+    i === activeIndex ? [p[0]+x, p[1]+y] : p
+  ));
+});
+// SVG 元素上直接 {...bind()}
+      </pre>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul>
+          <li>手势处理更健壮（支持触摸、惯性等）</li>
+          <li>代码更简洁，不需要手动管理 mousedown/move/up 状态</li>
+          <li>库很轻量（~7KB gzip）</li>
+        </ul></div>
+        <div class="cons"><h4>缺点</h4><ul>
+          <li>引入新依赖</li>
+          <li>在 SVG viewBox 坐标系中仍需要做坐标映射（offset 是屏幕像素，不是 SVG 单位）</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>替换为 Canvas + React</h3>
+      <p>EditMode 用 Canvas 渲染，通过 <code>canvas.getBoundingClientRect()</code> 做坐标映射，鼠标事件直接操作 canvas 上的点。</p>
+      <h4>核心代码思路：</h4>
+      <pre style="background:#f5f5f5;padding:8px;font-size:11px;border-radius:4px;">
+const rect = canvas.getBoundingClientRect();
+const x = (e.clientX - rect.left) / scale + offsetX;
+const y = (e.clientY - rect.top) / scale + offsetY;
+// 找最近的控制点，拖拽更新
+      </pre>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul>
+          <li>性能最好，适合点数多的复杂 prefab</li>
+          <li>可以实现更丰富的视觉效果（高亮、hover 效果）</li>
+        </ul></div>
+        <div class="cons"><h4>缺点</h4><ul>
+          <li>需要重写整个渲染逻辑（道路线、控制点、节点标记等）</li>
+          <li>与现有 SVG 代码完全割裂，维护两套渲染</li>
+          <li>工作量最大</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 2rem; padding: 1rem; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+  <h4>💡 我的推荐：选项 A（SVG 原生拖拽）</h4>
+  <p>理由：</p>
+  <ul>
+    <li>项目已有完整的 SVG 渲染基础（Preview.tsx），EditMode 可以直接复用这套坐标系</li>
+    <li>prefab 的控制点数量经过抽稀后不会太多（通常 5-20 个），SVG 性能完全够用</li>
+    <li>坐标转换虽然需要手写，但 <code>getScreenCTM()</code> 是标准 SVG API，代码量很少</li>
+    <li>零依赖，不增加项目复杂度</li>
+  </ul>
+  <p>B 方案的 <code>@use-gesture/react</code> 也不错，但在 SVG viewBox 坐标系里仍然需要做坐标映射，优势不明显。C 方案工作量太大，不值得。</p>
+</div>

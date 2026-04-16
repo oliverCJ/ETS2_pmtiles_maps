@@ -1,9 +1,11 @@
 import { getExtent } from '@truckermudgeon/base/geom';
 import {
   calculateLaneInfo,
+  toNavCurveRoadStrings,
   toRoadStringsAndPolygons,
 } from '@truckermudgeon/map/prefabs';
 import type { PrefabDescription } from '@truckermudgeon/map/types';
+import { Legend } from './Legend';
 
 const mapColors = {
   [0]: '#eaeced', // road
@@ -25,24 +27,26 @@ export const Preview = ({ prefab }: { prefab: PrefabDescription }) => {
       .concat(prefab.navCurves.flatMap(nc => [nc.start, nc.end])),
   );
   const { polygons, roadStrings } = toRoadStringsAndPolygons(prefab);
+  const navRoadStrings = toNavCurveRoadStrings(prefab);
   const width = Math.max(5, maxX - minX);
   const height = Math.max(5, maxY - minY);
   const xPadding = 10;
   const yPadding = 10;
   const roadStringColors = ['red', 'green', 'blue', 'gray', 'cyan', 'purple'];
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox={`${minX - xPadding} ${minY - yPadding} ${width + xPadding * 2} ${
-        height + yPadding * 2
-      }`}
-      style={{
-        border: '1px solid',
-        strokeLinecap: 'round',
-        width: '100%',
-        height: '100%',
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox={`${minX - xPadding} ${minY - yPadding} ${width + xPadding * 2} ${
+          height + yPadding * 2
+        }`}
+        style={{
+          border: '1px solid',
+          strokeLinecap: 'round',
+          width: '100%',
+          flex: 1,
+        }}
+      >
       <defs>
         <marker
           id="rsTriangle"
@@ -137,6 +141,22 @@ export const Preview = ({ prefab }: { prefab: PrefabDescription }) => {
         x2={0}
         y2={maxY + 2 * yPadding}
       />
+      {navRoadStrings.map((nrs, i) => (
+        <polyline
+          key={`nav-road-${i}`}
+          stroke="orange"
+          strokeWidth={2}
+          opacity={0.6}
+          points={nrs.points.map(p => p.join(',')).join(' ')}
+          fill="none"
+          strokeLinecap="round"
+        >
+          <title>
+            Node {nrs.sourceNodeIndex} → {nrs.targetNodeIndex}
+            {'\n'}Lanes: L{nrs.leftLaneCount} R{nrs.rightLaneCount}
+          </title>
+        </polyline>
+      ))}
       {calculateLaneInfo(prefab)
         .entries()
         .toArray()
@@ -157,5 +177,7 @@ export const Preview = ({ prefab }: { prefab: PrefabDescription }) => {
           ),
         )}
     </svg>
+    <Legend />
+  </div>
   );
 };
