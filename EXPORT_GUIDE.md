@@ -25,6 +25,10 @@ cd ~/ETS2LA_maps
 NODE_OPTIONS="--max-old-space-size=12288" npx tsx packages/clis/parser/index.ts \
   -g "/mnt/d/SteamLibrary/steamapps/common/Euro Truck Simulator 2" \
   -o ./data
+
+NODE_OPTIONS="--max-old-space-size=12288" npx tsx packages/clis/parser/index.ts \
+  -g "/mnt/f/SteamLibrary/steamapps/common/American Truck Simulator" \
+  -o ./data
 ```
 
 **常用参数：**

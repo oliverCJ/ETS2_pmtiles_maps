@@ -599,6 +599,184 @@ export interface DefData {
   mileageTargets: MileageTarget[];
 }
 
+// ============================================================================
+// Prefab Semantic Sidecar Types
+// ============================================================================
+
+/**
+ * Represents a lane route within a prefab instance.
+ * A lane route is a path from one node to another, composed of navigation curves.
+ */
+export interface LaneRoute {
+  /** Unique ID within the prefab instance */
+  id: number;
+  /** Index of the starting node in the prefab's nodeUids array */
+  startNodeIndex: number;
+  /** Index of the ending node in the prefab's nodeUids array */
+  endNodeIndex: number;
+  /** Sequence of points in global map coordinates [x, y] */
+  points: [number, number][];
+  /** Array of semaphore IDs (local to the prefab) that affect this route */
+  semaphoreIds: number[];
+  /** Initial bearing of the route in degrees (0-360, 0=North, 90=East) */
+  bearing: number;
+  /** Total length of the route in meters */
+  length: number;
+  /** Optional: Original navCurve indices for debugging */
+  curveIndices?: number[];
+  /** Optional: Route type (physical or AI) */
+  type?: 'physical' | 'ai';
+}
+
+/**
+ * Represents a semaphore (traffic light or gate) in global coordinates.
+ */
+export interface TransformedSemaphore {
+  /** Semaphore ID (local to the prefab, matches PrefabDescription.semaphores[i].id) */
+  id: number;
+  /** Global X coordinate */
+  x: number;
+  /** Global Y coordinate */
+  y: number;
+  /** Global rotation in radians */
+  rotation: number;
+  /** Semaphore type: 1=traffic light, 2=gate */
+  type: number;
+  /** Array of lane route IDs that this semaphore affects */
+  affectedRoutes: number[];
+}
+
+/**
+ * Represents a prefab instance with semantic data for runtime consumption.
+ */
+export interface PrefabSemanticInstance {
+  /** Prefab unique identifier (hex string) */
+  uid: string;
+  /** Token referencing the PrefabDescription */
+  token: string;
+  /** Center X coordinate */
+  x: number;
+  /** Center Y coordinate */
+  y: number;
+  /** Rotation angle in radians (from origin node) */
+  rotation: number;
+  /** Array of node UIDs (hex strings) that this prefab connects */
+  nodeUids: string[];
+  /** Array of lane routes within this prefab */
+  laneRoutes: LaneRoute[];
+  /** Array of semaphores within this prefab (in global coordinates) */
+  semaphores: TransformedSemaphore[];
+  /** Optional: Bounding box for spatial queries */
+  bounds?: {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+  };
+  /** Optional: DLC guard value */
+  dlcGuard?: number;
+}
+
+/**
+ * Represents a sector containing multiple prefab instances.
+ */
+export interface PrefabSemanticSector {
+  /** Sector X coordinate */
+  sectorX: number;
+  /** Sector Y coordinate */
+  sectorY: number;
+  /** Array of prefab instances in this sector */
+  prefabs: PrefabSemanticInstance[];
+}
+
+/**
+ * Metadata for a single sector.
+ */
+export interface SectorMetadata {
+  /** Bounding box of the sector */
+  bounds: {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+  };
+  /** Number of prefabs in this sector */
+  prefabCount: number;
+  /** Relative file path to the sector data */
+  file: string;
+}
+
+/**
+ * Index file structure for the semantic sidecar data.
+ */
+export interface PrefabSemanticIndex {
+  /** Version of the semantic data format */
+  version: string;
+  /** Map identifier: "europe" or "usa" */
+  map: 'europe' | 'usa';
+  /** Size of each sector in map units (e.g., 2000 = 2km × 2km) */
+  sectorSize: number;
+  /** Overall bounding box of all data */
+  bounds: {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+  };
+  /** Map of sector keys to metadata */
+  sectors: Record<string, SectorMetadata>;
+  /** Statistics about the semantic data */
+  statistics: {
+    totalPrefabs: number;
+    totalLaneRoutes: number;
+    totalSemaphores: number;
+    avgRoutesPerPrefab: number;
+  };
+}
+
+/**
+ * Entry in the semaphore reverse index.
+ */
+export interface SemaphoreIndexEntry {
+  /** Sector X coordinate where this semaphore is located */
+  sectorX: number;
+  /** Sector Y coordinate where this semaphore is located */
+  sectorY: number;
+  /** Prefab UID that contains this semaphore */
+  prefabUid: string;
+  /** Local semaphore ID within the prefab */
+  localId: number;
+  /** Global X coordinate */
+  x: number;
+  /** Global Y coordinate */
+  y: number;
+  /** Semaphore type: 1=traffic light, 2=gate */
+  type: number;
+}
+
+/**
+ * Semaphore reverse index structure.
+ * Maps composite keys (prefabUid_localId) to semaphore locations.
+ */
+export interface SemaphoreIndex {
+  /** Version of the index format */
+  version: string;
+  /** Map of composite keys to semaphore entries */
+  index: Record<string, SemaphoreIndexEntry>;
+}
+
+export interface DefData {
+  countries: Country[];
+  companyDefs: Company[];
+  roadLooks: WithToken<RoadLook>[];
+  prefabDescriptions: WithToken<WithPath<PrefabDescription>>[];
+  modelDescriptions: WithToken<ModelDescription>[];
+  signDescriptions: WithToken<SignDescription>[];
+  achievements: WithToken<Achievement>[];
+  routes: WithToken<Route>[];
+  mileageTargets: MileageTarget[];
+}
+
 // GeoJSON
 
 export type DebugFeature = GeoJSON.Feature<
