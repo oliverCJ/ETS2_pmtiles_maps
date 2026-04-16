@@ -1,0 +1,41 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`toNavCurveRoadStrings > snapshot: T-junction road strings are stable 1`] = `
+[
+  {
+    "leftLaneCount": 0,
+    "pointCount": 11,
+    "rightLaneCount": 1,
+    "sourceNodeIndex": 0,
+    "targetNodeIndex": 2,
+  },
+  {
+    "leftLaneCount": 0,
+    "pointCount": 13,
+    "rightLaneCount": 1,
+    "sourceNodeIndex": 2,
+    "targetNodeIndex": 0,
+  },
+  {
+    "leftLaneCount": 0,
+    "pointCount": 12,
+    "rightLaneCount": 1,
+    "sourceNodeIndex": 0,
+    "targetNodeIndex": 1,
+  },
+  {
+    "leftLaneCount": 0,
+    "pointCount": 2,
+    "rightLaneCount": 2,
+    "sourceNodeIndex": 1,
+    "targetNodeIndex": 2,
+  },
+  {
+    "leftLaneCount": 0,
+    "pointCount": 2,
+    "rightLaneCount": 2,
+    "sourceNodeIndex": 2,
+    "targetNodeIndex": 1,
+  },
+]
+`;

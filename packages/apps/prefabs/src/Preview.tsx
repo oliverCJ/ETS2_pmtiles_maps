@@ -5,6 +5,7 @@ import {
   toRoadStringsAndPolygons,
 } from '@truckermudgeon/map/prefabs';
 import type { PrefabDescription } from '@truckermudgeon/map/types';
+import { Legend } from './Legend';
 
 const mapColors = {
   [0]: '#eaeced', // road
@@ -33,18 +34,19 @@ export const Preview = ({ prefab }: { prefab: PrefabDescription }) => {
   const yPadding = 10;
   const roadStringColors = ['red', 'green', 'blue', 'gray', 'cyan', 'purple'];
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox={`${minX - xPadding} ${minY - yPadding} ${width + xPadding * 2} ${
-        height + yPadding * 2
-      }`}
-      style={{
-        border: '1px solid',
-        strokeLinecap: 'round',
-        width: '100%',
-        height: '100%',
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox={`${minX - xPadding} ${minY - yPadding} ${width + xPadding * 2} ${
+          height + yPadding * 2
+        }`}
+        style={{
+          border: '1px solid',
+          strokeLinecap: 'round',
+          width: '100%',
+          flex: 1,
+        }}
+      >
       <defs>
         <marker
           id="rsTriangle"
@@ -175,5 +177,7 @@ export const Preview = ({ prefab }: { prefab: PrefabDescription }) => {
           ),
         )}
     </svg>
+    <Legend />
+  </div>
   );
 };

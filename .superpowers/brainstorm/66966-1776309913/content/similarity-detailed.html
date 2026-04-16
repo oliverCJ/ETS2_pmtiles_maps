@@ -1,0 +1,132 @@
+<h2>识别"相似 prefab"的四种方式详解</h2>
+<p class="subtitle">当你修复了一个 prefab 后，系统如何判断"哪些其他 prefab 也应该用同样的修复方法"？</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>基于 prefab 的结构特征</h3>
+      <p><strong>判断依据：</strong>分析 prefab 的几何和拓扑结构</p>
+      <h4>具体特征包括：</h4>
+      <ul>
+        <li><strong>节点数量</strong>：3个节点 = T型路口，4个节点 = 十字路口，5+个节点 = 环形或复杂交叉口</li>
+        <li><strong>车道配置</strong>：每个方向的车道数（如"2进2出"）</li>
+        <li><strong>是否分隔式</strong>：双向道路中间有无物理隔离带（通过 navCurves 横向距离判断）</li>
+        <li><strong>是否有转弯车道</strong>：是否存在左转/右转专用道</li>
+      </ul>
+      <h4>实际例子：</h4>
+      <p>你修复了一个"3节点、双向各2车道、无隔离带"的 T 型路口端点偏移问题。系统会找出所有符合这个特征的 prefab（可能有几十个不同的 T 型路口变体），建议对它们应用相同的修复逻辑。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul>
+          <li>自动化程度高，不需要你手动分类</li>
+          <li>能覆盖结构相似但文件路径不同的 prefab</li>
+          <li>修复逻辑基于实际几何特征，更可靠</li>
+        </ul></div>
+        <div class="cons"><h4>缺点</h4><ul>
+          <li>需要实现特征提取算法（复杂度中等）</li>
+          <li>可能误判：结构相似但实际问题不同的 prefab</li>
+          <li>特征定义需要不断调整优化</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>基于 prefab 的路径前缀</h3>
+      <p><strong>判断依据：</strong>prefab 文件在游戏资源中的目录结构</p>
+      <h4>路径示例：</h4>
+      <ul>
+        <li><code>prefab/cross_temp/us_cross_2-2_country_t_*.ppd</code> → 美国乡村 T 型路口系列</li>
+        <li><code>prefab/fork_temp/us_split_*.ppd</code> → 美国分叉路口系列</li>
+        <li><code>prefab/roundabout/*.ppd</code> → 环形交叉口系列</li>
+      </ul>
+      <h4>实际例子：</h4>
+      <p>你修复了 <code>prefab/cross_temp/us_cross_2-2_country_t_1-1_country_no_right_2_tmpl.ppd</code>。系统会找出所有 <code>prefab/cross_temp/</code> 下的其他 prefab，认为它们是"同一系列的路口变体"，建议应用相同修复。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul>
+          <li>实现极其简单（字符串前缀匹配）</li>
+          <li>符合游戏开发者的分类逻辑（同目录通常是同类型）</li>
+          <li>不会误判结构完全不同的 prefab</li>
+        </ul></div>
+        <div class="cons"><h4>缺点</h4><ul>
+          <li>依赖游戏资源的目录组织方式（如果游戏更新改了目录结构就失效）</li>
+          <li>无法覆盖不同目录但结构相似的 prefab（如欧洲和美国的同类路口在不同目录）</li>
+          <li>粒度可能太粗或太细（一个目录下可能混杂多种变体）</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>基于问题的类型</h3>
+      <p><strong>判断依据：</strong>分析你做的修复操作属于哪一类算法问题</p>
+      <h4>问题类型分类：</h4>
+      <ul>
+        <li><strong>端点偏移</strong>：道路端点没有精确对齐到节点位置（修复：调整端点坐标）</li>
+        <li><strong>车道合并错误</strong>：双向道路被错误地分成了两条单向道路（修复：调整 <code>DIVIDED_THRESHOLD</code> 阈值）</li>
+        <li><strong>车道数计算错误</strong>：leftLaneCount/rightLaneCount 统计不对（修复：修改车道分组逻辑）</li>
+        <li><strong>中线选择错误</strong>：选了错误的车道作为代表曲线（修复：改变 median 选择算法）</li>
+      </ul>
+      <h4>实际例子：</h4>
+      <p>你拖拽修复了一个端点，系统检测到"原始端点距离节点 3.5 米，修复后距离 0.2 米"，判断这是"端点偏移"问题。然后系统扫描所有 prefab，找出那些也存在"端点距离节点 > 2 米"的情况，建议对它们应用相同的端点对齐算法。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul>
+          <li>修复针对性强，直击算法 bug 根源</li>
+          <li>能跨越不同结构、不同路径的 prefab（只要问题类型相同）</li>
+          <li>生成的算法改进建议更精准</li>
+        </ul></div>
+        <div class="cons"><h4>缺点</h4><ul>
+          <li>需要实现问题类型检测算法（复杂度高）</li>
+          <li>问题分类可能不准确（一个修复可能同时涉及多个问题）</li>
+          <li>需要预先定义好所有可能的问题类型</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="d" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>手动标注</h3>
+      <p><strong>判断依据：</strong>你在修复时手动指定适用范围</p>
+      <h4>交互流程：</h4>
+      <ol>
+        <li>你拖拽修复了一个 prefab 的端点</li>
+        <li>系统弹出对话框："这个修复应该应用到哪些 prefab？"</li>
+        <li>你可以选择：
+          <ul>
+            <li>"仅此 prefab"（只修复当前这一个）</li>
+            <li>"所有 3 节点 T 型路口"（基于结构特征）</li>
+            <li>"所有 <code>prefab/cross_temp/</code> 下的路口"（基于路径）</li>
+            <li>"所有端点偏移 > 2米 的 prefab"（基于问题类型）</li>
+            <li>或者自定义一个过滤条件</li>
+          </ul>
+        </li>
+      </ol>
+      <h4>实际例子：</h4>
+      <p>你修复了一个美国乡村 T 型路口，发现问题是"双向道路被错误分成两条单向"。你手动标注："这个修复适用于所有美国地图的 T 型路口，但不包括欧洲地图"。系统记录这个规则，生成对应的算法改进建议。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul>
+          <li>最灵活，你完全掌控适用范围</li>
+          <li>不需要复杂的自动分类算法</li>
+          <li>可以结合多种判断依据（结构+路径+问题类型）</li>
+          <li>避免误判导致的错误修复扩散</li>
+        </ul></div>
+        <div class="cons"><h4>缺点</h4><ul>
+          <li>每次修复都需要你做决策，工作量大</li>
+          <li>需要你对 prefab 分类有深入理解</li>
+          <li>如果标注不当，可能遗漏应该修复的 prefab</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 2rem; padding: 1rem; background: #f0f0f0; border-radius: 8px;">
+  <h4>💡 混合方案也可行</h4>
+  <p>比如：系统先用 <strong>A（结构特征）</strong> 自动建议一批相似 prefab，然后你可以用 <strong>D（手动标注）</strong> 调整范围，最后系统基于 <strong>C（问题类型）</strong> 生成算法改进代码。</p>
+</div>

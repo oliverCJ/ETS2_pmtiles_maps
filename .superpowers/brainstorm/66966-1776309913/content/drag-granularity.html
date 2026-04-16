@@ -1,0 +1,100 @@
+<h2>拖拽交互的粒度选择</h2>
+<p class="subtitle">橙色道路线条由多个点组成（起点、中间控制点、终点），你希望能拖拽哪些？</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>只能拖拽端点（起点和终点）</h3>
+      <p>每条橙色道路线有两个可拖拽的圆点：起点和终点。中间的曲线形状由算法自动计算，不可手动调整。</p>
+      <div class="visual-example">
+        <svg viewBox="0 0 200 100" style="width: 100%; max-width: 400px; border: 1px solid #ddd;">
+          <path d="M 20 50 Q 60 30, 100 50 T 180 50" stroke="orange" stroke-width="3" fill="none" opacity="0.6"/>
+          <circle cx="20" cy="50" r="5" fill="red" stroke="white" stroke-width="2"/>
+          <circle cx="180" cy="50" r="5" fill="red" stroke="white" stroke-width="2"/>
+          <text x="20" y="70" font-size="12" text-anchor="middle">起点</text>
+          <text x="180" y="70" font-size="12" text-anchor="middle">终点</text>
+        </svg>
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul>
+          <li>交互简单，不会误操作</li>
+          <li>符合大多数修复场景（端点对齐问题最常见）</li>
+          <li>生成的修复规则清晰（只记录端点坐标）</li>
+        </ul></div>
+        <div class="cons"><h4>缺点</h4><ul>
+          <li>无法修复曲线形状本身的问题（如转弯半径不对）</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>可以拖拽所有控制点</h3>
+      <p>橙色道路线上的每个点都可以拖拽：起点、终点、以及中间的所有 spline 控制点。你可以精确调整整条曲线的形状。</p>
+      <div class="visual-example">
+        <svg viewBox="0 0 200 100" style="width: 100%; max-width: 400px; border: 1px solid #ddd;">
+          <path d="M 20 50 Q 60 30, 100 50 T 180 50" stroke="orange" stroke-width="3" fill="none" opacity="0.6"/>
+          <circle cx="20" cy="50" r="5" fill="red" stroke="white" stroke-width="2"/>
+          <circle cx="60" cy="30" r="4" fill="blue" stroke="white" stroke-width="1.5"/>
+          <circle cx="100" cy="50" r="4" fill="blue" stroke="white" stroke-width="1.5"/>
+          <circle cx="140" cy="50" r="4" fill="blue" stroke="white" stroke-width="1.5"/>
+          <circle cx="180" cy="50" r="5" fill="red" stroke="white" stroke-width="2"/>
+          <text x="100" y="15" font-size="10" text-anchor="middle">控制点</text>
+        </svg>
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul>
+          <li>最灵活，可以修复任何形状问题</li>
+          <li>适合复杂路口的精细调整</li>
+        </ul></div>
+        <div class="cons"><h4>缺点</h4><ul>
+          <li>交互复杂，容易误操作（点太多）</li>
+          <li>修复规则难以推广（每个控制点的调整都是个案）</li>
+          <li>很难从控制点调整推断出算法改进建议</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>拖拽端点 + 整体平移/旋转</h3>
+      <p>可以拖拽端点调整位置，也可以选中整条道路进行平移或旋转（保持曲线形状不变）。</p>
+      <div class="visual-example">
+        <svg viewBox="0 0 200 100" style="width: 100%; max-width: 400px; border: 1px solid #ddd;">
+          <path d="M 20 50 Q 60 30, 100 50 T 180 50" stroke="orange" stroke-width="3" fill="none" opacity="0.6"/>
+          <circle cx="20" cy="50" r="5" fill="red" stroke="white" stroke-width="2"/>
+          <circle cx="180" cy="50" r="5" fill="red" stroke="white" stroke-width="2"/>
+          <circle cx="100" cy="50" r="6" fill="green" stroke="white" stroke-width="2"/>
+          <text x="100" y="70" font-size="10" text-anchor="middle">拖动此处平移整条线</text>
+        </svg>
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul>
+          <li>兼顾端点对齐和整体位置调整</li>
+          <li>适合"道路整体偏移"的问题</li>
+          <li>修复规则仍然清晰（记录平移/旋转量）</li>
+        </ul></div>
+        <div class="cons"><h4>缺点</h4><ul>
+          <li>交互稍复杂（需要区分"拖端点"和"拖整体"）</li>
+          <li>仍然无法修复曲线形状本身的问题</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 2rem; padding: 1rem; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+  <h4>💡 我的推荐：选项 A（只拖拽端点）</h4>
+  <p><strong>理由：</strong></p>
+  <ul>
+    <li>根据你之前的描述，主要问题是"路口有缺口"、"端点不对齐"，这些都是端点位置问题</li>
+    <li>曲线形状本身通常是算法生成的，如果形状不对，应该改算法而不是手动调每个点</li>
+    <li>简单的交互更容易推广到算法改进（"所有 T 型路口的端点都应该对齐到节点中心"）</li>
+  </ul>
+  <p>如果未来发现确实需要调整曲线形状，可以再扩展功能。</p>
+</div>

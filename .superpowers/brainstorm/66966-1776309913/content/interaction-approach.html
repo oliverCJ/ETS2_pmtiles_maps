@@ -1,0 +1,40 @@
+<h2>拖拽修复功能：选择交互方式</h2>
+<p class="subtitle">当你发现某个 prefab 的道路端点位置有误，你希望如何进行修复？</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>拖拽端点 → 导出修复规则文件</h3>
+      <p>在 SVG 预览中直接拖拽橙色道路的端点到正确位置，修复后导出一个 JSON 文件（如 <code>prefab-fixes.json</code>），generator 在运行时读取这个文件，对指定 prefab 的端点坐标做覆盖替换。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>直观，见即所得</li><li>修复结果持久保存，可 commit 到代码库</li><li>不改动算法代码</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>只修复特定 prefab 的特定实例，不能修复所有同类 prefab</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>拖拽端点 → 自动生成算法补丁代码</h3>
+      <p>在 SVG 预览中拖拽端点，app 分析原始坐标和目标坐标的差值，推断出应该修改 <code>toNavCurveRoadStrings</code> 算法中的哪个参数（如 <code>DIVIDED_THRESHOLD</code> 阈值），并生成建议的代码变更。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>修复能覆盖所有同类 prefab</li><li>直接改进算法质量</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>推断算法参数较难实现，不一定准确</li><li>复杂 prefab 的问题不一定能用参数调整解决</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>拖拽端点 → 显示坐标差值 → 手动写回算法</h3>
+      <p>在 SVG 预览中拖拽端点到正确位置，右侧面板显示：原始坐标、目标坐标、差值（delta）。你看到这些数值后，手动分析应该调整哪段算法代码，然后去 <code>prefabs.ts</code> 里修改。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>实现简单</li><li>你完全掌控改哪里、怎么改</li><li>可以用这些数据来改进算法</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>需要开发者手动分析数据，有一定门槛</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -7,7 +7,7 @@ import {
   Typography,
 } from '@mui/joy';
 import type { AutocompleteRenderGroupParams } from '@mui/joy/Autocomplete/AutocompleteProps';
-import { assert, assertExists } from '@truckermudgeon/base/assert';
+import { assertExists } from '@truckermudgeon/base/assert';
 import { center, getExtent } from '@truckermudgeon/base/geom';
 import { putIfAbsent } from '@truckermudgeon/base/map';
 import { fromAtsCoordsToWgs84 } from '@truckermudgeon/map/projections';
@@ -35,11 +35,15 @@ export interface PrefabOption {
   };
 }
 
+type GameMap = 'usa' | 'europe';
+
 interface PrefabSelectProps {
   onChange: (o: PrefabOption | undefined) => void;
+  onLoad?: (options: PrefabOption[]) => void;
 }
 
 export const PrefabSelect = (props: PrefabSelectProps) => {
+  const [game, setGame] = useState<GameMap>('usa');
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<PrefabOption[]>([]);
 
@@ -47,16 +51,24 @@ export const PrefabSelect = (props: PrefabSelectProps) => {
     stringify: option => option.label.replaceAll('_', ' '),
   });
 
-  const promiseOptions = async () => {
-    assert(options.length === 0);
-
+  const loadOptions = async (map: GameMap) => {
     const [descs, items, nodes] = (await Promise.all([
-      fetch('/usa-prefabDescriptions.json').then(res => res.json()),
-      fetch('/usa-prefabs.json').then(res => res.json()),
-      fetch('/usa-nodes.json').then(res => res.json()),
+      fetch(`/${map}-prefabDescriptions.json`).then(res => res.json()),
+      fetch(`/${map}-prefabs.json`).then(res => res.json()),
+      fetch(`/${map}-nodes.json`).then(res => res.json()),
     ])) as [PrefabDescription[], Prefab[], Node[]];
-
     return toOptions(descs, items, nodes);
+  };
+
+  // 切换游戏时重置选项并重新加载
+  const handleGameChange = (newGame: GameMap) => {
+    setGame(newGame);
+    setOptions([]);
+    props.onChange(undefined);
+    void loadOptions(newGame).then(groups => {
+      setOptions(groups);
+      props.onLoad?.(groups);
+    });
   };
 
   const loading = open && options.length === 0;
@@ -65,33 +77,61 @@ export const PrefabSelect = (props: PrefabSelectProps) => {
     if (!loading) {
       return undefined;
     }
-
-    void promiseOptions().then(groups => active && setOptions(groups));
+    void loadOptions(game).then(groups => {
+      if (active) {
+        setOptions(groups);
+        props.onLoad?.(groups);
+      }
+    });
     return () => {
       active = false;
     };
   }, [loading]);
 
   return (
-    <Autocomplete
-      open={open}
-      loading={loading}
-      endDecorator={
-        loading ? (
-          <CircularProgress size="sm" sx={{ bgcolor: 'background.surface' }} />
-        ) : null
-      }
-      onOpen={() => setOpen(true)}
-      onClose={() => setOpen(false)}
-      onChange={(_, v) => props.onChange(v ?? undefined)}
-      placeholder={'Select...'}
-      options={options}
-      filterOptions={filterOptions}
-      blurOnSelect
-      autoComplete
-      renderGroup={formatGroupLabel}
-      groupBy={option => option.group}
-    />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+      {/* 游戏切换按钮 */}
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        {(['usa', 'europe'] as GameMap[]).map(g => (
+          <button
+            key={g}
+            onClick={() => handleGameChange(g)}
+            style={{
+              padding: '4px 10px',
+              cursor: 'pointer',
+              fontWeight: game === g ? 'bold' : 'normal',
+              background: game === g ? '#1976d2' : '#eee',
+              color: game === g ? '#fff' : '#333',
+              border: '1px solid #ccc',
+              borderRadius: 4,
+              fontSize: 13,
+            }}
+          >
+            {g === 'usa' ? '🇺🇸 ATS' : '🇪🇺 ETS2'}
+          </button>
+        ))}
+      </div>
+      <Autocomplete
+        sx={{ flex: 1 }}
+        open={open}
+        loading={loading}
+        endDecorator={
+          loading ? (
+            <CircularProgress size="sm" sx={{ bgcolor: 'background.surface' }} />
+          ) : null
+        }
+        onOpen={() => setOpen(true)}
+        onClose={() => setOpen(false)}
+        onChange={(_, v) => props.onChange(v ?? undefined)}
+        placeholder={`搜索 ${game === 'usa' ? 'ATS' : 'ETS2'} prefab...`}
+        options={options}
+        filterOptions={filterOptions}
+        blurOnSelect
+        autoComplete
+        renderGroup={formatGroupLabel}
+        groupBy={option => option.group}
+      />
+    </div>
   );
 };
 
