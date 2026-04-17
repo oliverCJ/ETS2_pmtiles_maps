@@ -181,10 +181,155 @@ WSL 中的输出目录对应 Windows 路径：
 在 Windows 文件管理器地址栏输入 `\\wsl$\Ubuntu\` 可以浏览 WSL 文件系统。
 
 ## 启动前端应用
- `npm start --workspace=packages/apps/prefabs`
 
-  或者主地图应用：
+```bash
+# Prefabs 调试工具（不需要地图数据，直接可用）
+npm start --workspace=packages/apps/prefabs
 
-  `npm start --workspace=packages/apps/demo`
+# 主地图应用（需要 PMTiles 文件）
+npm start --workspace=packages/apps/demo
+```
 
-不过 demo app 需要 PMTiles 地图数据才能显示内容，prefabs app 是纯前端调试工具，不需要任何外部数据，直接就能看到效果。建议先跑 prefabs app。
+demo app 需要 PMTiles 地图数据才能显示内容，prefabs app 是纯前端调试工具，不需要任何外部数据，直接就能看到效果。
+
+---
+
+## 验证 NavCurves 道路修改效果
+
+本项目对 prefab 道路生成算法做了重要改进：将原来基于 `mapPoints` 的道路生成替换为基于 `navCurves` 的方案，解决了路口断路、分叉缺口、并行道路错位等问题。
+
+### 方法一：Prefabs App 可视化对比（推荐，最快）
+
+不需要跑 generator，直接在 prefabs app 里对比新旧算法效果。
+
+**1. 将游戏数据复制到 prefabs app 的 public 目录**
+
+```bash
+# ETS2 数据
+cp /path/to/data/europe-prefabDescriptions.json packages/apps/prefabs/public/
+cp /path/to/data/europe-prefabs.json packages/apps/prefabs/public/
+cp /path/to/data/europe-nodes.json packages/apps/prefabs/public/
+
+# ATS 数据（可选）
+cp /path/to/data/usa-prefabDescriptions.json packages/apps/prefabs/public/
+cp /path/to/data/usa-prefabs.json packages/apps/prefabs/public/
+cp /path/to/data/usa-nodes.json packages/apps/prefabs/public/
+```
+
+**2. 启动 prefabs app**
+
+```bash
+npm start --workspace=packages/apps/prefabs
+```
+
+**3. 查看对比**
+
+- 顶部切换 `ATS` / `ETS2` 选择游戏
+- 搜索框输入关键词找到目标 prefab（如 `cross`、`split`、`roundabout`）
+- SVG 预览中各颜色含义：
+  - **红色线**：旧算法（mapPoints）生成的道路
+  - **橙色线**：新算法（navCurves）生成的道路 ← 这是 generator 实际使用的
+  - **蓝色箭头线**：车道曲线（导航方向）
+  - **绿色圆点**：原点节点（node 0）
+  - **红色圆点**：其他节点
+
+**4. 验证重点**
+
+| 路口类型 | 搜索关键词 | 验证内容 |
+|---|---|---|
+| T 型路口 | `cross` | 三条橙色线端点应精确汇聚到节点圆点上 |
+| Y 型分叉 | `split` / `fork` | 两条并行线起点对齐，无 V 形缺口 |
+| 十字路口 | `cross` + 4节点 | 四条线在中心点精确相交 |
+| 高速分隔 | `hw` / `divided` | 双向道路显示为两条独立平行线 |
+| 环形交叉 | `roundabout` | 进出口连接正确，不崩溃 |
+
+---
+
+### 方法二：生成 GeoJSON 后用 geojson.io 调试
+
+> **注意**：ETS2/ATS 使用游戏自定义坐标系，直接拖入 geojson.io 会显示在错误位置（通常在大西洋或非洲附近）。需要用 `--focusCity` 参数生成小范围数据，再通过坐标偏移找到正确位置。
+
+**1. 生成小范围 GeoJSON（WSL 终端）**
+
+```bash
+cd ~/ETS2LA_maps
+
+# ETS2：聚焦某个城市，生成 GeoJSON（不需要 tippecanoe）
+NODE_OPTIONS="--max-old-space-size=12288" npx tsx packages/clis/generator/index.ts map \
+  -m europe \
+  -i ./data \
+  -o ./output_debug \
+  -t geojson \
+  -f "Praha"
+
+# ATS：聚焦某个城市
+NODE_OPTIONS="--max-old-space-size=12288" npx tsx packages/clis/generator/index.ts map \
+  -m usa \
+  -i ./data \
+  -o ./output_debug \
+  -t geojson \
+  -f "Sacramento"
+```
+
+输出文件：`./output_debug/ets2.geojson`（约几十 MB）
+
+**2. 在 geojson.io 中查看**
+
+由于游戏坐标系与真实世界不同，GeoJSON 数据会显示在错误位置。查找方法：
+
+1. 打开 [geojson.io](https://geojson.io)，将生成的 `.geojson` 文件拖入页面
+2. 数据加载后，在右侧 JSON 面板找任意一个 Feature 的 `coordinates`，记下大概坐标范围
+3. 在地图左下角的坐标输入框跳转到对应坐标，或使用 `Ctrl+F` 搜索
+
+**实际坐标范围参考：**
+
+| 游戏 | 经度范围 | 纬度范围 |
+|---|---|---|
+| ETS2（欧洲） | 约 -10° ~ 40° | 约 30° ~ 65° |
+| ATS（美国） | 约 -130° ~ -60° | 约 25° ~ 55° |
+
+> ETS2 的坐标投影会把游戏地图映射到真实欧洲的大致位置，所以实际上可以在 geojson.io 的欧洲区域找到数据。
+
+**3. 验证重点**
+
+在 geojson.io 中点击有问题的路段，查看右侧 properties 面板：
+
+```json
+{
+  "type": "road",
+  "prefab": "2o0ds",      ← 这是 prefab token，可在 prefabs app 中搜索
+  "roadType": "local",
+  "leftLanes": 2,
+  "rightLanes": 2
+}
+```
+
+记下 `prefab` 字段的 token，在 prefabs app 中搜索该 token，可以直接看到这个路口的几何形状和新旧算法对比。
+
+---
+
+### 方法三：生成 PMTiles 后用 demo app 验证（完整验证）
+
+这是最完整的验证方式，能看到最终渲染效果。
+
+**1. 生成 PMTiles（WSL 终端，需要 tippecanoe）**
+
+```bash
+NODE_OPTIONS="--max-old-space-size=12288" npx tsx packages/clis/generator/index.ts map \
+  -m europe \
+  -i ./data \
+  -o ./output \
+  -t pmtiles
+```
+
+**2. 配置 demo app 加载本地 PMTiles**
+
+将生成的 `ets2.pmtiles` 放到 demo app 可访问的位置，参考 `packages/apps/demo` 的配置文档。
+
+**3. 启动 demo app**
+
+```bash
+npm start --workspace=packages/apps/demo
+```
+
+在地图上找到路口密集区域（如布拉格、巴黎周边），放大到街道级别，检查路口连接是否正确。
